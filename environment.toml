@@ -1,26 +1,5 @@
-# Each value is either a string shared by all shells, or a table with
-# per-shell values: { bash = "...", powershell = "..." }.
-# Leaving a shell out of the table skips that entry for that shell.
+path = ["~/Projects/environment/dist/target/release", "~/bin", "~/.cargo/bin"]
 
-# Prepended to PATH (first entry wins). `~` expands to the home directory.
-path = ["~/bin", "~/.cargo/bin"]
-
-[env]
-EDITOR = "nvim"
-PAGER = { bash = "less" }
-
-# Extra arguments are forwarded: `gco main` -> `git checkout main`.
 [aliases]
-g = "git"
-gs = "git status"
-gco = "git checkout"
-gl = "git log --oneline --graph --decorate"
-ll = { bash = "ls -la", powershell = "Get-ChildItem -Force" }
-".." = { bash = "cd ..", powershell = "Set-Location .." }
-
-[functions.mkcd]
-bash = 'mkdir -p "$1" && cd "$1"'
-powershell = '''
-New-Item -ItemType Directory -Force -Path $args[0] | Out-Null
-Set-Location $args[0]
-'''
+open_tools = "proj tools"
+open_ai = "proj ai"

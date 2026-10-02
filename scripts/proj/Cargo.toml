@@ -1,0 +1,11 @@
+[package]
+name = "proj"
+version = "0.1.0"
+edition = "2024"
+description = "Open a ~/Projects workspace in tmux"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+dialoguer = { version = "0.12", default-features = false, features = ["fuzzy-select"] }
+xshell = "0.2"

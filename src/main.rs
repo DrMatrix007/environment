@@ -65,7 +65,6 @@ fn main() -> Result<()> {
                 let path = out_dir.join(file_name(shell));
                 let mut script = generate::generate(&config, shell);
                 if shell == ShellKind::Powershell {
-                    // Windows PowerShell 5.1 reads BOM-less files as ANSI.
                     script.insert(0, '\u{feff}');
                 }
                 std::fs::write(&path, script).with_context(|| format!("writing {}", path.display()))?;

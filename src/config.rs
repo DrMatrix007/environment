@@ -3,30 +3,22 @@ use indexmap::IndexMap;
 use serde::Deserialize;
 use std::path::Path;
 
-/// Top-level configuration. Maps preserve file order so later entries can
-/// reference earlier ones (e.g. an env var built from another).
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    /// Environment variables to export.
     #[serde(default)]
     pub env: IndexMap<String, PerShell>,
 
-    /// Directories prepended to PATH. A leading `~` expands to the home directory.
     #[serde(default)]
     pub path: Vec<PerShell>,
 
-    /// Command aliases. Extra arguments are forwarded to the command.
     #[serde(default)]
     pub aliases: IndexMap<String, PerShell>,
 
-    /// Shell functions. Bodies are shell-specific, so usually given per shell.
     #[serde(default)]
     pub functions: IndexMap<String, PerShell>,
 }
 
-/// A value that is either shared by all shells or specified per shell.
-/// When given per shell, omitting a shell skips the entry for that shell.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum PerShell {

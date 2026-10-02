@@ -1,11 +1,18 @@
+[workspace]
+members = ["scripts/*"]
+
+[workspace.dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.6.7", features = ["derive"] }
+
 [package]
 name = "environment"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "1.0.104"
-clap = { version = "4.6.7", features = ["derive"] }
+anyhow.workspace = true
+clap.workspace = true
 indexmap = { version = "2.14.2", features = ["serde"] }
 serde = { version = "1.0.229", features = ["derive"] }
 toml = { version = "1.1.6", features = ["preserve_order"] }

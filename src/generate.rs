@@ -10,18 +10,14 @@ pub fn generate(config: &Config, shell: ShellKind) -> String {
     }
 }
 
-/// Single-quote a string for bash: `it's` -> `'it'\''s'`.
 fn bash_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', r"'\''"))
 }
 
-/// Single-quote a string for PowerShell: `it's` -> `'it''s'`.
 fn ps_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "''"))
 }
 
-/// Split a leading `~` / `~/` off a path so the caller can substitute the
-/// shell's own home-directory expression.
 fn split_home(path: &str) -> Option<&str> {
     match path.strip_prefix('~') {
         Some(rest) if rest.is_empty() || rest.starts_with(['/', '\\']) => Some(rest),
@@ -29,9 +25,6 @@ fn split_home(path: &str) -> Option<&str> {
     }
 }
 
-/// PowerShell resolves aliases before functions, so a built-in alias (e.g. `gc`,
-/// `gl`) would shadow our function. `Remove-Item Alias:..` misparses `..` as a
-/// path, hence the Get-Alias guard and -LiteralPath.
 fn ps_remove_alias(name: &str) -> String {
     let path = ps_quote(&format!("Alias:{name}"));
     format!(
@@ -63,7 +56,6 @@ fn bash(config: &Config) -> String {
     let paths: Vec<_> = config.path.iter().filter_map(|p| p.for_shell(shell)).collect();
     if !paths.is_empty() {
         out.push_str("\n# PATH\n");
-        // Prepend in reverse so the first configured entry ends up first.
         for path in paths.iter().rev() {
             let quoted = match split_home(path) {
                 Some(rest) => format!("\"$HOME\"{}", bash_quote(rest)),
@@ -89,8 +81,6 @@ fn bash(config: &Config) -> String {
     if !functions.is_empty() {
         out.push_str("\n# Functions\n");
         for (name, body) in functions {
-            // Drop any alias of the same name, otherwise bash expands it
-            // while parsing the function definition.
             writeln!(out, "unalias {name} 2>/dev/null\n{name}() {{\n{}\n}}", indent(body)).unwrap();
         }
     }
@@ -118,7 +108,6 @@ fn powershell(config: &Config) -> String {
             let expr = match split_home(path) {
                 Some("") => "$HOME".to_string(),
                 Some(rest) => {
-                    // Combine per segment so the separator matches the host OS.
                     let segments: Vec<_> =
                         rest.split(['/', '\\']).filter(|s| !s.is_empty()).map(ps_quote).collect();
                     format!("[IO.Path]::Combine($HOME, {})", segments.join(", "))
@@ -144,8 +133,6 @@ Remove-Variable __envPaths, __envCurrent, __p -ErrorAction SilentlyContinue
 
     let aliases: Vec<_> = config.aliases.iter().filter_map(|(k, v)| Some((k, v.for_shell(shell)?))).collect();
     if !aliases.is_empty() {
-        // Set-Alias can't carry arguments, so aliases become functions that
-        // forward @args.
         out.push_str("\n# Aliases\n");
         for (name, command) in aliases {
             writeln!(out, "{}\nfunction global:{name} {{ {command} @args }}", ps_remove_alias(name)).unwrap();
@@ -158,9 +145,9 @@ Remove-Variable __envPaths, __envCurrent, __p -ErrorAction SilentlyContinue
         for (name, body) in functions {
             writeln!(
                 out,
-                "{}\nfunction global:{name} {{\n{}\n}}",
+                "{}\nfunction global:{name} {{\n    $1, $2, $3, $4, $5, $6, $7, $8, $9 = $args\n{}\n}}",
                 ps_remove_alias(name),
-                indent(body)
+                indent(&body.replace("2>/dev/null", "2>$null"))
             )
             .unwrap();
         }

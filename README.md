@@ -29,7 +29,21 @@ or a per-shell table `{ bash = "...", powershell = "..." }`; leaving a shell out
 |---------------|------------------------------|---------------------------------------------------|
 | `[env]`       | `export NAME='value'`        | `$env:NAME = 'value'`                             |
 | `path = [..]` | prepended, no duplicates     | prepended, no duplicates                          |
-| `[aliases]`   | `alias name='cmd'`           | `function name { cmd @args }` (replaces built-in aliases) |
-| `[functions]` | `name() { body }`            | `function name { body }`                          |
+| `[aliases]`   | `alias name='cmd'`           | `function global:name { cmd @args }` (replaces built-in aliases) |
+| `[functions]` | `name() { body }`            | `function global:name { body }`                   |
+
+PowerShell functions also get the positional arguments as `$1`..`$9` and `2>/dev/null` becomes `2>$null`,
+so one function body using plain commands, `"$1"`, `||`, `&&` and `2>/dev/null` works in both shells
+(PowerShell 7+).
 
 Values are written literally (single-quoted); a leading `~` in `path` entries expands to the home directory.
+
+## Scripts
+
+`scripts/*` are small Rust CLIs in the same cargo workspace (clap for args, xshell for running commands,
+dialoguer for prompts). `.cargo/config.toml` points the target dir at `dist/target`, and
+`dist/target/release` is on PATH via `environment.toml`, so building is all it takes:
+
+```sh
+cargo build --release --workspace   # proj tools|ai [query] -> open_tools / open_ai
+```
