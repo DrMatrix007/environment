@@ -10,11 +10,11 @@ pub fn generate(config: &Config, shell: ShellKind) -> String {
     }
 }
 
-fn bash_quote(s: &str) -> String {
+pub fn bash_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', r"'\''"))
 }
 
-fn ps_quote(s: &str) -> String {
+pub fn ps_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "''"))
 }
 

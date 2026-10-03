@@ -8,7 +8,8 @@ use xshell::{Shell, cmd};
 #[derive(Parser)]
 #[command(about = "Open a ~/Projects workspace in tmux")]
 enum Cli {
-    /// lazygit | shell, in session "tools".
+    /// lazygit | shell window in session "tools"
+    /// (only switches to it when the session is new).
     Tools {
         query: Option<String>,
         /// Recreate the project's window.
@@ -95,17 +96,19 @@ impl Tmux {
         if !self.has_session("=tools") {
             cmd!(sh, "tmux new-session -d -s tools -n {name} -c {dir}").run()?;
             self.setup_tools(&window)?;
-        } else if !self.has_window("=tools", name) {
-            cmd!(sh, "tmux new-window -t =tools: -n {name} -c {dir}").run()?;
+            return self.enter("=tools", &window);
+        }
+        if !self.has_window("=tools", name) {
+            cmd!(sh, "tmux new-window -d -t =tools: -n {name} -c {dir}").run()?;
             self.setup_tools(&window)?;
         } else if force {
             let old = format!("=tools:old-{name}");
             cmd!(sh, "tmux rename-window -t {window} old-{name}").run()?;
-            cmd!(sh, "tmux new-window -t =tools: -n {name} -c {dir}").run()?;
+            cmd!(sh, "tmux new-window -d -t =tools: -n {name} -c {dir}").run()?;
             cmd!(sh, "tmux kill-window -t {old}").run()?;
             self.setup_tools(&window)?;
         }
-        self.enter("=tools", &window)
+        Ok(())
     }
 
     fn setup_tools(&self, window: &str) -> Result<()> {
@@ -123,7 +126,7 @@ impl Tmux {
             return self.enter("=ai", &window);
         }
         if self.has_window("=ai", name) {
-            cmd!(sh, "tmux split-window -h -t {window} -c {dir} claude").run()?;
+            cmd!(sh, "tmux split-window -d -h -t {window} -c {dir} claude").run()?;
             cmd!(sh, "tmux select-layout -t {window} tiled").run()?;
         } else {
             cmd!(sh, "tmux new-window -d -t =ai: -n {name} -c {dir} claude").run()?;
@@ -137,7 +140,9 @@ impl Tmux {
         if std::env::var_os("TMUX").is_some() {
             cmd!(sh, "tmux switch-client -t {session}").run()?;
         } else {
-            cmd!(sh, "tmux attach -t {session}").run()?;
+            // xshell gives children a null stdin; attach needs the real terminal.
+            let status = std::process::Command::new("tmux").args(["attach", "-t", session]).status()?;
+            anyhow::ensure!(status.success(), "tmux attach -t {session} failed: {status}");
         }
         Ok(())
     }

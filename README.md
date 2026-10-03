@@ -11,13 +11,20 @@ cargo run -- check                         # validate the config only
 Then load the output from your shell startup:
 
 ```sh
+cargo run -- install                       # appends to ~/.bashrc and $PROFILE (skips if already there)
+cargo run -- install -s bash --profile ~/.bash_profile
+```
+
+which adds
+
+```sh
 # ~/.bashrc
-source /path/to/dist/env.sh
+source '/path/to/dist/env.sh'
 ```
 
 ```powershell
 # $PROFILE
-. C:\path\to\dist\env.ps1
+. 'C:\path\to\dist\env.ps1'
 ```
 
 ## Config

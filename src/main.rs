@@ -1,5 +1,6 @@
 mod config;
 mod generate;
+mod install;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -32,6 +33,20 @@ enum Command {
         /// Print the script to stdout instead of writing files (requires a single --shell).
         #[arg(long, requires = "shell")]
         stdout: bool,
+    },
+    /// Add a line loading the generated script(s) to the shell profile(s): ~/.bashrc, $PROFILE.
+    Install {
+        /// Directory containing env.sh / env.ps1.
+        #[arg(short, long, default_value = "dist")]
+        out_dir: PathBuf,
+
+        /// Only install for this shell. Repeatable; defaults to all shells.
+        #[arg(short, long, value_enum)]
+        shell: Vec<ShellKind>,
+
+        /// Profile file to edit instead of the default (requires a single --shell).
+        #[arg(long, requires = "shell")]
+        profile: Option<PathBuf>,
     },
     /// Parse and validate a config file without generating anything.
     Check {
@@ -69,6 +84,13 @@ fn main() -> Result<()> {
                 }
                 std::fs::write(&path, script).with_context(|| format!("writing {}", path.display()))?;
                 println!("wrote {}", path.display());
+            }
+        }
+        Command::Install { out_dir, shell, profile } => {
+            let shells = if shell.is_empty() { vec![ShellKind::Bash, ShellKind::Powershell] } else { shell };
+            anyhow::ensure!(profile.is_none() || shells.len() == 1, "--profile needs exactly one --shell");
+            for shell in shells {
+                install::install(shell, &out_dir.join(file_name(shell)), profile.clone())?;
             }
         }
         Command::Check { config } => {
