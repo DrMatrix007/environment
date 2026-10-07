@@ -6,6 +6,7 @@ Generate bash and PowerShell environment scripts (env vars, PATH, aliases, funct
 cargo run -- generate                      # environment.toml -> dist/env.sh, dist/env.ps1
 cargo run -- generate -s bash --stdout     # print one script
 cargo run -- check                         # validate the config only
+cargo run -- full                          # generate + install + distribute-configurations
 ```
 
 Then load the output from your shell startup:
@@ -13,6 +14,7 @@ Then load the output from your shell startup:
 ```sh
 cargo run -- install                       # appends to ~/.bashrc and $PROFILE (skips if already there)
 cargo run -- install -s bash --profile ~/.bash_profile
+cargo run -- distribute-configurations     # copies configurations/psmux.conf -> ~/.psmux.conf
 ```
 
 which adds
@@ -44,6 +46,11 @@ so one function body using plain commands, `"$1"`, `||`, `&&` and `2>/dev/null` 
 (PowerShell 7+).
 
 Values are written literally (single-quoted); a leading `~` in `path` entries expands to the home directory.
+
+[`psmux.conf`](configurations/psmux.conf) configures psmux, the terminal multiplexer that `scripts/proj`'s
+`ai` command drives. It sets `default-shell` to `pwsh` so the `open_ai` / `open_tools` profile
+functions installed above are also available inside psmux panes.
+`cargo run -- distribute-configurations` (or `full`) copies it to `~/.psmux.conf`.
 
 ## Scripts
 

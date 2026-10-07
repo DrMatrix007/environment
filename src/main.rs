@@ -1,4 +1,5 @@
 mod config;
+mod configs;
 mod generate;
 mod install;
 
@@ -53,6 +54,18 @@ enum Command {
         #[arg(short, long, default_value = "environment.toml")]
         config: PathBuf,
     },
+    /// Copy static config files (psmux.conf, ...) to their target locations (e.g. ~/.psmux.conf).
+    DistributeConfigurations,
+    /// Generate, install, and distribute-configurations in one shot (full setup).
+    Full {
+        /// Path to the TOML config.
+        #[arg(short, long, default_value = "environment.toml")]
+        config: PathBuf,
+
+        /// Directory to write env.sh / env.ps1 into.
+        #[arg(short, long, default_value = "dist")]
+        out_dir: PathBuf,
+    },
 }
 
 fn file_name(shell: ShellKind) -> &'static str {
@@ -60,6 +73,17 @@ fn file_name(shell: ShellKind) -> &'static str {
         ShellKind::Bash => "env.sh",
         ShellKind::Powershell => "env.ps1",
     }
+}
+
+fn write_script(config: &Config, shell: ShellKind, out_dir: &std::path::Path) -> Result<PathBuf> {
+    let path = out_dir.join(file_name(shell));
+    let mut script = generate::generate(config, shell);
+    if shell == ShellKind::Powershell {
+        script.insert(0, '\u{feff}');
+    }
+    std::fs::write(&path, script).with_context(|| format!("writing {}", path.display()))?;
+    println!("wrote {}", path.display());
+    Ok(path)
 }
 
 fn main() -> Result<()> {
@@ -77,13 +101,7 @@ fn main() -> Result<()> {
             std::fs::create_dir_all(&out_dir)
                 .with_context(|| format!("creating {}", out_dir.display()))?;
             for shell in shells {
-                let path = out_dir.join(file_name(shell));
-                let mut script = generate::generate(&config, shell);
-                if shell == ShellKind::Powershell {
-                    script.insert(0, '\u{feff}');
-                }
-                std::fs::write(&path, script).with_context(|| format!("writing {}", path.display()))?;
-                println!("wrote {}", path.display());
+                write_script(&config, shell, &out_dir)?;
             }
         }
         Command::Install { out_dir, shell, profile } => {
@@ -103,6 +121,19 @@ fn main() -> Result<()> {
                 c.aliases.len(),
                 c.functions.len()
             );
+        }
+        Command::DistributeConfigurations => {
+            configs::distribute()?;
+        }
+        Command::Full { config, out_dir } => {
+            let config = Config::load(&config)?;
+            std::fs::create_dir_all(&out_dir)
+                .with_context(|| format!("creating {}", out_dir.display()))?;
+            for shell in [ShellKind::Bash, ShellKind::Powershell] {
+                let path = write_script(&config, shell, &out_dir)?;
+                install::install(shell, &path, None)?;
+            }
+            configs::distribute()?;
         }
     }
     Ok(())

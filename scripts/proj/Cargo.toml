@@ -2,7 +2,7 @@
 name = "proj"
 version = "0.1.0"
 edition = "2024"
-description = "Open a ~/Projects workspace in tmux"
+description = "Open a ~/Projects workspace in psmux"
 
 [dependencies]
 anyhow.workspace = true

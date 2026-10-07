@@ -5,32 +5,28 @@ use dialoguer::{FuzzySelect, theme::ColorfulTheme};
 use std::path::{Path, PathBuf};
 use xshell::{Shell, cmd};
 
+const AI_SESSION: &str = "ai";
+const TOOLS_SESSION: &str = "tools";
+
 #[derive(Parser)]
-#[command(about = "Open a ~/Projects workspace in tmux")]
+#[command(about = "Open a ~/Projects workspace in psmux")]
 enum Cli {
-    /// lazygit | shell window in session "tools"
-    /// (only switches to it when the session is new).
-    Tools {
-        query: Option<String>,
-        /// Recreate the project's window.
-        #[arg(short, long)]
-        force: bool,
-    },
-    /// Add a claude pane to the project's window in session "ai"
-    /// (only switches to it when the session is new).
+    /// lazygit | shell window in psmux session "tools" (focuses the project's existing window, or creates it).
+    Tools { query: Option<String> },
+    /// claude pane in psmux session "ai" (adds a window per project; adds a pane to that project's window if it's already open).
     Ai { query: Option<String> },
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let (Cli::Tools { query, .. } | Cli::Ai { query }) = &cli;
+    let (Cli::Tools { query } | Cli::Ai { query }) = &cli;
     let home = std::env::home_dir().context("no home directory")?;
     let Some((name, dir)) = pick(&home, query.as_deref())? else { return Ok(()) };
-    let tmux = Tmux { sh: Shell::new()?, dir, name: name.replace('.', "_") };
+    let wt = Wt { sh: Shell::new()?, dir, name };
 
     match cli {
-        Cli::Tools { force, .. } => tmux.tools(force),
-        Cli::Ai { .. } => tmux.ai(),
+        Cli::Tools { .. } => wt.tools(),
+        Cli::Ai { .. } => wt.ai(),
     }
 }
 
@@ -83,81 +79,68 @@ fn pick(home: &Path, query: Option<&str>) -> Result<Option<(String, PathBuf)>> {
     Ok(choice.map(|i| resolve(projects.swap_remove(i))))
 }
 
-struct Tmux {
+struct Wt {
     sh: Shell,
     name: String,
     dir: PathBuf,
 }
 
-impl Tmux {
-    fn tools(&self, force: bool) -> Result<()> {
+impl Wt {
+    fn tools(&self) -> Result<()> {
         let Self { sh, name, dir } = self;
-        let window = format!("=tools:{name}");
-        if !self.has_session("=tools") {
-            cmd!(sh, "tmux new-session -d -s tools -n {name} -c {dir}").run()?;
+        let window = format!("{TOOLS_SESSION}:{name}");
+        let exists = cmd!(sh, "psmux has-session -t {TOOLS_SESSION}").quiet().run().is_ok();
+        if !exists {
+            cmd!(sh, "psmux new-session -d -s {TOOLS_SESSION} -n {name} -c {dir}").run()?;
             self.setup_tools(&window)?;
-            return self.enter("=tools", &window);
+        } else {
+            let fmt = "#{window_name}";
+            let windows = cmd!(sh, "psmux list-windows -t {TOOLS_SESSION} -F {fmt}").read()?;
+            if !windows.lines().any(|line| line == name) {
+                cmd!(sh, "psmux new-window -d -t {TOOLS_SESSION} -n {name} -c {dir}").run()?;
+                self.setup_tools(&window)?;
+            }
         }
-        if !self.has_window("=tools", name) {
-            cmd!(sh, "tmux new-window -d -t =tools: -n {name} -c {dir}").run()?;
-            self.setup_tools(&window)?;
-        } else if force {
-            let old = format!("=tools:old-{name}");
-            cmd!(sh, "tmux rename-window -t {window} old-{name}").run()?;
-            cmd!(sh, "tmux new-window -d -t =tools: -n {name} -c {dir}").run()?;
-            cmd!(sh, "tmux kill-window -t {old}").run()?;
-            self.setup_tools(&window)?;
-        }
+        cmd!(sh, "psmux select-window -t {window}").run()?;
         Ok(())
     }
 
     fn setup_tools(&self, window: &str) -> Result<()> {
         let Self { sh, dir, .. } = self;
-        cmd!(sh, "tmux send-keys -t {window} lazygit Enter").run()?;
-        cmd!(sh, "tmux split-window -h -t {window} -c {dir}").run()?;
+        cmd!(sh, "psmux send-keys -t {window} lazygit Enter").run()?;
+        cmd!(sh, "psmux split-window -h -t {window} -c {dir}").run()?;
         Ok(())
     }
 
     fn ai(&self) -> Result<()> {
         let Self { sh, name, dir } = self;
-        let window = format!("=ai:{name}");
-        if !self.has_session("=ai") {
-            cmd!(sh, "tmux new-session -d -s ai -n {name} -c {dir} claude").run()?;
-            return self.enter("=ai", &window);
+        let exists = cmd!(sh, "psmux has-session -t {AI_SESSION}").quiet().run().is_ok();
+        if !exists {
+            cmd!(
+                sh,
+                "psmux new-session -d -s {AI_SESSION} -n {name} -c {dir} -- pwsh -NoExit -Command claude"
+            )
+            .run()?;
+            return Ok(());
         }
-        if self.has_window("=ai", name) {
-            cmd!(sh, "tmux split-window -d -h -t {window} -c {dir} claude").run()?;
-            cmd!(sh, "tmux select-layout -t {window} tiled").run()?;
+
+        let fmt = "#{window_name}";
+        let windows = cmd!(sh, "psmux list-windows -t {AI_SESSION} -F {fmt}").read()?;
+        if windows.lines().any(|line| line == name) {
+            cmd!(
+                sh,
+                "psmux split-window -d -t {AI_SESSION}:{name} -c {dir} -- pwsh -NoExit -Command claude"
+            )
+            .run()?;
         } else {
-            cmd!(sh, "tmux new-window -d -t =ai: -n {name} -c {dir} claude").run()?;
+            cmd!(
+                sh,
+                "psmux new-window -d -t {AI_SESSION} -n {name} -c {dir} -- pwsh -NoExit -Command claude"
+            )
+            .run()?;
         }
+
+        cmd!(sh, "psmux select-window -t {AI_SESSION}:{name}").run()?;
         Ok(())
-    }
-
-    fn enter(&self, session: &str, window: &str) -> Result<()> {
-        let sh = &self.sh;
-        cmd!(sh, "tmux select-window -t {window}").run()?;
-        if std::env::var_os("TMUX").is_some() {
-            cmd!(sh, "tmux switch-client -t {session}").run()?;
-        } else {
-            // xshell gives children a null stdin; attach needs the real terminal.
-            let status = std::process::Command::new("tmux").args(["attach", "-t", session]).status()?;
-            anyhow::ensure!(status.success(), "tmux attach -t {session} failed: {status}");
-        }
-        Ok(())
-    }
-
-    fn has_session(&self, session: &str) -> bool {
-        let sh = &self.sh;
-        cmd!(sh, "tmux has-session -t {session}").quiet().ignore_stderr().run().is_ok()
-    }
-
-    fn has_window(&self, session: &str, name: &str) -> bool {
-        let (sh, format) = (&self.sh, "#{window_name}");
-        cmd!(sh, "tmux list-windows -t {session} -F {format}")
-            .quiet()
-            .ignore_stderr()
-            .read()
-            .is_ok_and(|names| names.lines().any(|n| n == name))
     }
 }
