@@ -6,7 +6,7 @@ Generate bash and PowerShell environment scripts (env vars, PATH, aliases, funct
 cargo run -- generate                      # environment.toml -> dist/env.sh, dist/env.ps1
 cargo run -- generate -s bash --stdout     # print one script
 cargo run -- check                         # validate the config only
-cargo run -- full                          # generate + install + distribute-configurations
+cargo run -- full                          # build --release --workspace + generate + install + distribute-configurations
 ```
 
 Then load the output from your shell startup:
@@ -48,16 +48,13 @@ so one function body using plain commands, `"$1"`, `||`, `&&` and `2>/dev/null` 
 Values are written literally (single-quoted); a leading `~` in `path` entries expands to the home directory.
 
 [`psmux.conf`](configurations/psmux.conf) configures psmux, the terminal multiplexer that `scripts/proj`'s
-`ai` command drives. It sets `default-shell` to `pwsh` so the `open_ai` / `open_tools` profile
-functions installed above are also available inside psmux panes.
+`ai` command drives. It sets `default-shell` to `pwsh` so `proj open` / `proj ai` (on PATH via the config above)
+also work directly inside psmux panes.
 `cargo run -- distribute-configurations` (or `full`) copies it to `~/.psmux.conf`.
 
 ## Scripts
 
 `scripts/*` are small Rust CLIs in the same cargo workspace (clap for args, xshell for running commands,
 dialoguer for prompts). `.cargo/config.toml` points the target dir at `dist/target`, and
-`dist/target/release` is on PATH via `environment.toml`, so building is all it takes:
-
-```sh
-cargo build --release --workspace   # proj tools|ai [query] -> open_tools / open_ai
-```
+`dist/target/release` is on PATH via `environment.toml`, so `cargo run -- full` (which builds the
+whole workspace first) is all it takes to get `proj open|ai|manage [query]` working directly from the shell.

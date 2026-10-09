@@ -126,6 +126,14 @@ fn main() -> Result<()> {
             configs::distribute()?;
         }
         Command::Full { config, out_dir } => {
+            // Exclude our own package: it's already built (we're running as it), and on
+            // Windows a running exe can't be overwritten by the build that would rebuild it.
+            let status = std::process::Command::new("cargo")
+                .args(["build", "--release", "--workspace", "--exclude", "environment"])
+                .status()
+                .context("running cargo build --release --workspace")?;
+            anyhow::ensure!(status.success(), "cargo build --release --workspace failed");
+
             let config = Config::load(&config)?;
             std::fs::create_dir_all(&out_dir)
                 .with_context(|| format!("creating {}", out_dir.display()))?;

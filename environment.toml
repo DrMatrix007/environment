@@ -1,5 +1,1 @@
 path = ["~/Projects/environment/dist/target/release", "~/bin", "~/.cargo/bin"]
-
-[aliases]
-open_tools = "proj tools"
-open_ai = "proj ai"
