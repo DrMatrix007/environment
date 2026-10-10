@@ -125,12 +125,14 @@ key = "alt+t"
 type = "popup"
 command = "proj"
 
-# [keybindings.window_management]
-# focus_sidebar = "s"
+[status_bar]
+window_mode_label = "🪟"
+terminal_mode_label = "💻"
+tiling_label = "▦"
 
 [appearance]
 theme = "one_dark"
-border_style = "glyphs"
+border_style = "normal"
 window_title_position = "top"
 preferred_shell = "pwsh"
 dockbar_position = "top"
@@ -147,6 +149,12 @@ auto_enter_terminal_on_focus = "off"
 nvim_navigation = false
 alt_drag = true
 max_fps = 240
+window_button_style = "dots"
+hide_scrollbar = false
+gap = 0
+glyphs = "heavy"
+
+
 
 [appearance.sidebar]
 sections = "sessions,spacer:5,agents,spacer,terminals"
