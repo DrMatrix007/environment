@@ -54,7 +54,7 @@ enum Command {
         #[arg(short, long, default_value = "environment.toml")]
         config: PathBuf,
     },
-    /// Copy static config files (psmux.conf, ...) to their target locations (e.g. ~/.psmux.conf).
+    /// Copy static config files (tuios config.toml) to their target locations.
     DistributeConfigurations,
     /// Generate, install, and distribute-configurations in one shot (full setup).
     Full {
@@ -126,8 +126,6 @@ fn main() -> Result<()> {
             configs::distribute()?;
         }
         Command::Full { config, out_dir } => {
-            // Exclude our own package: it's already built (we're running as it), and on
-            // Windows a running exe can't be overwritten by the build that would rebuild it.
             let status = std::process::Command::new("cargo")
                 .args(["build", "--release", "--workspace", "--exclude", "environment"])
                 .status()

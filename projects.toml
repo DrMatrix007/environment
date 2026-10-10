@@ -1,0 +1,4 @@
+root = "~/Projects"
+
+[paths]
+".claude" = "~/.claude"

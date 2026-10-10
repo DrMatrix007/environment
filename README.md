@@ -6,7 +6,7 @@ Generate bash and PowerShell environment scripts (env vars, PATH, aliases, funct
 cargo run -- generate                      # environment.toml -> dist/env.sh, dist/env.ps1
 cargo run -- generate -s bash --stdout     # print one script
 cargo run -- check                         # validate the config only
-cargo run -- full                          # build --release --workspace + generate + install + distribute-configurations
+cargo run -- full                          # build --release --workspace (except environment) + generate + install + distribute-configurations
 ```
 
 Then load the output from your shell startup:
@@ -14,7 +14,7 @@ Then load the output from your shell startup:
 ```sh
 cargo run -- install                       # appends to ~/.bashrc and $PROFILE (skips if already there)
 cargo run -- install -s bash --profile ~/.bash_profile
-cargo run -- distribute-configurations     # copies configurations/psmux.conf -> ~/.psmux.conf
+cargo run -- distribute-configurations     # copies configurations/tuios/config.toml -> %LOCALAPPDATA%\tuios\config.toml
 ```
 
 which adds
@@ -47,14 +47,24 @@ so one function body using plain commands, `"$1"`, `||`, `&&` and `2>/dev/null` 
 
 Values are written literally (single-quoted); a leading `~` in `path` entries expands to the home directory.
 
-[`psmux.conf`](configurations/psmux.conf) configures psmux, the terminal multiplexer that `scripts/proj`'s
-`ai` command drives. It sets `default-shell` to `pwsh` so `proj open` / `proj ai` (on PATH via the config above)
-also work directly inside psmux panes.
-`cargo run -- distribute-configurations` (or `full`) copies it to `~/.psmux.conf`.
+## Projects + agents (tuios)
 
-## Scripts
+`proj <name>` (the `proj` crate in this repo) fuzzy-matches a directory under the `root` configured
+in [`projects.toml`](projects.toml) (default `~/Projects`), or a hardcoded entry in its `[paths]`
+table (currently just `.claude`). By default it runs `tuios new <name> --cwd <dir> --detach` to
+create the named tuios session headless if one doesn't exist yet, and does nothing if it's already
+running. With `--attached`, it instead runs `tuios attach <name> -c` in that directory, attaching
+in the foreground and creating the session if it doesn't exist yet.
 
-`scripts/*` are small Rust CLIs in the same cargo workspace (clap for args, xshell for running commands,
-dialoguer for prompts). `.cargo/config.toml` points the target dir at `dist/target`, and
-`dist/target/release` is on PATH via `environment.toml`, so `cargo run -- full` (which builds the
-whole workspace first) is all it takes to get `proj open|ai|manage [query]` working directly from the shell.
+A project directory with a `.tuios.tape` file (see [`.tuios.tape`](.tuios.tape) for this repo) gets
+offered that layout the first time tuios sees a shell in it; review and trust it once
+(`Ctrl+B T t` inside tuios) and it builds automatically after that.
+
+[`configurations/tuios/config.toml`](configurations/tuios/config.toml) is tuios's own config, tracked
+in this repo and distributed by `cargo run -- full` / `cargo run -- distribute-configurations` to
+`%LOCALAPPDATA%\tuios\config.toml`.
+
+[`configurations/tuios/tools.tape`](configurations/tuios/tools.tape) is distributed the same way, to
+`%LOCALAPPDATA%\tuios\tools.tape`. It's a reusable tape you can run anytime with `tuios tape exec tools`
+to add a lazygit + terminal pane pair to whatever window you're in — distinct from `.tuios.tape`, which
+only auto-builds when a shell enters this project's directory.

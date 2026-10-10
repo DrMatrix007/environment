@@ -1,1 +1,28 @@
-path = ["~/Projects/environment/dist/target/release", "~/bin", "~/.cargo/bin"]
+path = ["~/Projects/environment/dist/target/release"]
+
+[env]
+TERM = "xterm-256color"
+
+[functions.prompt]
+powershell = """
+$gle = if ($? -eq $true) { 0 } else {
+    $errEntry = Get-History -Count 1
+    if ($Error[0].InvocationInfo.HistoryId -eq $errEntry.Id) { -1 } else { $LastExitCode }
+}
+$LastHistoryEntry = Get-History -Count 1
+$out = ""
+if ($null -ne $Global:__LastHistoryId -and $Global:__LastHistoryId -ne -1) {
+    if ($LastHistoryEntry.Id -eq $Global:__LastHistoryId) {
+        $out += "$([char]27)]133;D$([char]7)"
+    } else {
+        $out += "$([char]27)]133;D;$gle$([char]7)"
+    }
+}
+$loc = $executionContext.SessionState.Path.CurrentLocation
+$out += "$([char]27)]133;A$([char]7)"
+$out += "$([char]27)]9;9;`"$loc`"$([char]7)"
+$out += "PS $loc$('>' * ($nestedPromptLevel + 1)) "
+$out += "$([char]27)]133;B$([char]7)"
+$Global:__LastHistoryId = $LastHistoryEntry.Id
+return $out
+"""
