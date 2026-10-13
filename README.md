@@ -14,7 +14,7 @@ Then load the output from your shell startup:
 ```sh
 cargo run -- install                       # appends to ~/.bashrc and $PROFILE (skips if already there)
 cargo run -- install -s bash --profile ~/.bash_profile
-cargo run -- distribute-configurations     # copies configurations/tuios/config.toml -> %LOCALAPPDATA%\tuios\config.toml
+cargo run -- distribute-configurations     # copies configurations/herdr/config.toml -> %APPDATA%\herdr\config.toml
 ```
 
 which adds
@@ -47,24 +47,24 @@ so one function body using plain commands, `"$1"`, `||`, `&&` and `2>/dev/null` 
 
 Values are written literally (single-quoted); a leading `~` in `path` entries expands to the home directory.
 
-## Projects + agents (tuios)
+## Projects
 
 `proj <name>` (the `proj` crate in this repo) fuzzy-matches a directory under the `root` configured
 in [`projects.toml`](projects.toml) (default `~/Projects`), or a hardcoded entry in its `[paths]`
-table (currently just `.claude`). By default it runs `tuios new <name> --cwd <dir> --detach` to
-create the named tuios session headless if one doesn't exist yet, and does nothing if it's already
-running. With `--attached`, it instead runs `tuios attach <name> -c` in that directory, attaching
-in the foreground and creating the session if it doesn't exist yet.
+table (currently just `.claude`). It targets a herdr session (named by `$HERDR_SESSION` if set in the
+environment, else `projects.toml`'s `herdr_session` key), starting that session's headless server
+first if it isn't running yet. By default it creates a herdr workspace labeled `<name>`, cwd'd into
+the matched directory, if one doesn't already exist, and does nothing if it's already running. With
+`--attached`, it creates or focuses that workspace and then attaches the terminal to the herdr
+session in the foreground. With `--focus`, it creates or focuses that workspace the same way but
+skips attaching a terminal, switching whatever herdr client is already attached over to that
+workspace instead.
 
-A project directory with a `.tuios.tape` file (see [`.tuios.tape`](.tuios.tape) for this repo) gets
-offered that layout the first time tuios sees a shell in it; review and trust it once
-(`Ctrl+B T t` inside tuios) and it builds automatically after that.
-
-[`configurations/tuios/config.toml`](configurations/tuios/config.toml) is tuios's own config, tracked
+[`configurations/herdr/config.toml`](configurations/herdr/config.toml) is herdr's own config, tracked
 in this repo and distributed by `cargo run -- full` / `cargo run -- distribute-configurations` to
-`%LOCALAPPDATA%\tuios\config.toml`.
-
-[`configurations/tuios/tools.tape`](configurations/tuios/tools.tape) is distributed the same way, to
-`%LOCALAPPDATA%\tuios\tools.tape`. It's a reusable tape you can run anytime with `tuios tape exec tools`
-to add a lazygit + terminal pane pair to whatever window you're in — distinct from `.tuios.tape`, which
-only auto-builds when a shell enters this project's directory.
+`%APPDATA%\herdr\config.toml`. It sets `keys.switch_tab = "alt+1..9"` so alt+1 through alt+9 jump
+directly between tabs, and `keys.focus_agent = "ctrl+1..9"` so ctrl+1 through ctrl+9
+jump directly to agent rows. It also binds `prefix+ctrl+g` to open `lazygit` in a popup, `alt+arrows`
+to move between panes, `ctrl+alt+left`/`ctrl+alt+right` to cycle tabs, and
+`ctrl+shift+alt+left`/`ctrl+shift+alt+right` to cycle workspaces, and `prefix+ctrl+p` to open a
+popup running `proj --focus` to switch to another project.

@@ -7,7 +7,9 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::thread::sleep;
+use std::time::Duration;
 
 #[derive(Parser)]
 struct Cli {
@@ -15,18 +17,43 @@ struct Cli {
     name: String,
     #[arg(long)]
     attached: bool,
+    #[arg(long)]
+    focus: bool,
 }
 
 #[derive(Deserialize)]
 struct Config {
     root: String,
+    herdr_session: String,
     #[serde(default)]
     paths: BTreeMap<String, String>,
 }
 
 #[derive(Deserialize)]
-struct Session {
+struct SessionList {
+    sessions: Vec<SessionInfo>,
+}
+
+#[derive(Deserialize)]
+struct SessionInfo {
     name: String,
+    running: bool,
+}
+
+#[derive(Deserialize)]
+struct WorkspaceListResponse {
+    result: WorkspaceListResult,
+}
+
+#[derive(Deserialize)]
+struct WorkspaceListResult {
+    workspaces: Vec<WorkspaceInfo>,
+}
+
+#[derive(Deserialize)]
+struct WorkspaceInfo {
+    workspace_id: String,
+    label: String,
 }
 
 fn expand_tilde(value: &str, home: &Path) -> PathBuf {
@@ -79,16 +106,48 @@ fn resolve(candidates: &[(String, PathBuf)], query: &str) -> Result<Option<(Stri
     Ok(choice.map(|i| candidates[i].clone()))
 }
 
-fn session_matches(exit_code: i32, stdout: &[u8], target: &str) -> Result<bool> {
-    ensure!(exit_code == 0 || exit_code == 3, "tuios ls --json exited with {exit_code}");
-    let sessions: Vec<Session> = serde_json::from_slice(stdout)?;
-    Ok(sessions.iter().any(|s| s.name == target))
+fn session_is_running(stdout: &[u8], name: &str) -> Result<bool> {
+    let list: SessionList = serde_json::from_slice(stdout)?;
+    Ok(list.sessions.iter().any(|s| s.name == name && s.running))
 }
 
-fn session_running(name: &str) -> Result<bool> {
-    let output = Command::new("tuios").args(["ls", "--json"]).output()?;
-    let exit_code = output.status.code().unwrap_or(-1);
-    session_matches(exit_code, &output.stdout, name)
+fn session_running(session: &str) -> Result<bool> {
+    let output = Command::new("herdr").args(["session", "list", "--json"]).output()?;
+    ensure!(output.status.success(), "herdr session list exited with {}", output.status);
+    session_is_running(&output.stdout, session)
+        .with_context(|| String::from_utf8_lossy(&output.stderr).into_owned())
+}
+
+fn ensure_session_running(session: &str) -> Result<()> {
+    if session_running(session)? {
+        return Ok(());
+    }
+    Command::new("herdr")
+        .args(["--session", session, "server"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .with_context(|| format!("starting herdr session '{session}'"))?;
+
+    for _ in 0..50 {
+        if session_running(session)? {
+            return Ok(());
+        }
+        sleep(Duration::from_millis(100));
+    }
+    anyhow::bail!("herdr session '{session}' did not start in time")
+}
+
+fn find_workspace_id(stdout: &[u8], label: &str) -> Result<Option<String>> {
+    let response: WorkspaceListResponse = serde_json::from_slice(stdout)?;
+    Ok(response.result.workspaces.into_iter().find(|w| w.label == label).map(|w| w.workspace_id))
+}
+
+fn find_workspace(session: &str, label: &str) -> Result<Option<String>> {
+    let output = Command::new("herdr").args(["--session", session, "workspace", "list"]).output()?;
+    ensure!(output.status.success(), "herdr workspace list exited with {}", output.status);
+    find_workspace_id(&output.stdout, label)
         .with_context(|| String::from_utf8_lossy(&output.stderr).into_owned())
 }
 
@@ -108,23 +167,49 @@ fn main() -> Result<()> {
         return Ok(());
     };
 
-    if cli.attached {
-        let status = Command::new("tuios").args(["attach", &name, "-c"]).current_dir(&dir).status()?;
-        ensure!(status.success(), "tuios attach exited with {status}");
+    let session = match std::env::var("HERDR_SESSION") {
+        Ok(value) if !value.is_empty() => value,
+        _ => config.herdr_session,
+    };
+
+    ensure_session_running(&session)?;
+    let existing = find_workspace(&session, &name)?;
+
+    if cli.attached || cli.focus {
+        match existing {
+            Some(id) => {
+                let status = Command::new("herdr")
+                    .args(["--session", &session, "workspace", "focus", &id])
+                    .status()?;
+                ensure!(status.success(), "herdr workspace focus exited with {status}");
+            }
+            None => {
+                let status = Command::new("herdr")
+                    .args(["--session", &session, "workspace", "create", "--cwd"])
+                    .arg(&dir)
+                    .args(["--label", &name, "--focus"])
+                    .status()?;
+                ensure!(status.success(), "herdr workspace create exited with {status}");
+            }
+        }
+        if cli.attached {
+            let status = Command::new("herdr").args(["--session", &session]).status()?;
+            ensure!(status.success(), "herdr exited with {status}");
+        }
         return Ok(());
     }
 
-    if session_running(&name)? {
-        println!("tuios session '{name}' already running");
+    if existing.is_some() {
+        println!("herdr workspace '{name}' already running");
         return Ok(());
     }
 
-    let status = Command::new("tuios")
-        .args(["new", &name, "--cwd"])
+    let status = Command::new("herdr")
+        .args(["--session", &session, "workspace", "create", "--cwd"])
         .arg(&dir)
-        .arg("--detach")
+        .args(["--label", &name, "--no-focus"])
         .status()?;
-    ensure!(status.success(), "tuios new exited with {status}");
+    ensure!(status.success(), "herdr workspace create exited with {status}");
     Ok(())
 }
 
@@ -220,31 +305,32 @@ mod tests {
     }
 
     #[test]
-    fn session_matches_true_when_target_present() {
-        let stdout = br#"[{"name":"foo"},{"name":"bar"}]"#;
-        assert!(session_matches(0, stdout, "foo").unwrap());
+    fn session_is_running_true_when_running() {
+        let stdout = br#"{"sessions":[{"name":"default","running":false},{"name":"projects","running":true}]}"#;
+        assert!(session_is_running(stdout, "projects").unwrap());
     }
 
     #[test]
-    fn session_matches_false_when_target_absent() {
-        let stdout = br#"[{"name":"foo"},{"name":"bar"}]"#;
-        assert!(!session_matches(0, stdout, "baz").unwrap());
+    fn session_is_running_false_when_stopped() {
+        let stdout = br#"{"sessions":[{"name":"projects","running":false}]}"#;
+        assert!(!session_is_running(stdout, "projects").unwrap());
     }
 
     #[test]
-    fn session_matches_ignores_unknown_fields() {
-        let stdout = br#"[{"name":"foo","pid":123,"extra":{"a":1}}]"#;
-        assert!(session_matches(0, stdout, "foo").unwrap());
+    fn session_is_running_false_when_absent() {
+        let stdout = br#"{"sessions":[{"name":"default","running":false}]}"#;
+        assert!(!session_is_running(stdout, "projects").unwrap());
     }
 
     #[test]
-    fn session_matches_treats_exit_code_3_as_success() {
-        let stdout = br#"[{"name":"foo"},{"name":"bar"}]"#;
-        assert!(session_matches(3, stdout, "foo").unwrap());
+    fn find_workspace_id_returns_id_on_label_match() {
+        let stdout = br#"{"id":"cli:workspace:list","result":{"type":"workspace_list","workspaces":[{"workspace_id":"w1","label":"environment"},{"workspace_id":"w2","label":"other"}]}}"#;
+        assert_eq!(find_workspace_id(stdout, "other").unwrap(), Some("w2".to_string()));
     }
 
     #[test]
-    fn session_matches_errors_on_other_exit_codes() {
-        assert!(session_matches(1, b"[]", "foo").is_err());
+    fn find_workspace_id_none_when_no_match() {
+        let stdout = br#"{"id":"cli:workspace:list","result":{"type":"workspace_list","workspaces":[{"workspace_id":"w1","label":"environment"}]}}"#;
+        assert_eq!(find_workspace_id(stdout, "missing").unwrap(), None);
     }
 }

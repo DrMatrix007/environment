@@ -1,0 +1,31 @@
+onboarding = false
+
+[theme]
+name = "catppuccin"
+auto_switch = false
+
+[keys]
+switch_tab = "alt+1..9"
+focus_agent = "ctrl+1..9"
+focus_pane_left = "alt+left"
+focus_pane_down = "alt+down"
+focus_pane_up = "alt+up"
+focus_pane_right = "alt+right"
+previous_tab = "ctrl+alt+left"
+next_tab = "ctrl+alt+right"
+previous_workspace = "ctrl+shift+alt+left"
+next_workspace = "ctrl+shift+alt+right"
+
+[[keys.command]]
+key = "prefix+ctrl+g"
+type = "popup"
+command = "lazygit"
+width = "80%"
+height = "80%"
+
+[[keys.command]]
+key = "prefix+ctrl+p"
+type = "popup"
+command = "proj --focus"
+width = "80%"
+height = "80%"

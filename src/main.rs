@@ -54,7 +54,7 @@ enum Command {
         #[arg(short, long, default_value = "environment.toml")]
         config: PathBuf,
     },
-    /// Copy static config files (tuios config.toml) to their target locations.
+    /// Copy static config files (herdr config.toml) to their target locations.
     DistributeConfigurations,
     /// Generate, install, and distribute-configurations in one shot (full setup).
     Full {

@@ -1,4 +1,5 @@
 root = "~/Projects"
+herdr_session = "projects"
 
 [paths]
 ".claude" = "~/.claude"
