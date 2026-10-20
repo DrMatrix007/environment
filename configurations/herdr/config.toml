@@ -1,5 +1,8 @@
 onboarding = false
 
+[ui]
+host_cursor = "native"
+
 [theme]
 name = "catppuccin"
 auto_switch = false
@@ -13,8 +16,10 @@ focus_pane_up = "alt+up"
 focus_pane_right = "alt+right"
 previous_tab = "ctrl+alt+left"
 next_tab = "ctrl+alt+right"
-previous_workspace = "ctrl+shift+alt+left"
-next_workspace = "ctrl+shift+alt+right"
+previous_workspace = "ctrl+alt+up"
+next_workspace = "ctrl+alt+down"
+previous_agent = "ctrl+shift+alt+up"
+next_agent = "ctrl+shift+alt+down"
 
 [[keys.command]]
 key = "prefix+ctrl+g"
